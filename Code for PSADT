@@ -1,0 +1,87 @@
+        #============================
+        #Paste this section into the "Pre-Installation Tasks" section of PSADT
+        #============================
+        
+        
+        #FOR PARTS MARKED WITH [___], REPLACE WITH SPECIFIC INFO FROM YOUR ORGANIZATION. ex, [DOMAIN]\ 
+        
+            Write-Host ""
+
+            #current logged-in user -- Find the username of the user logged into Windows
+            #REPLACE [DOMAIN] with the domain of your organization
+            $thisUser = (Get-WMIObject -class Win32_ComputerSystem | select username).username  #returns [DOMAIN]\[username]
+            $thisUser = $thisUser -replace '[DOMAIN]\\','' #removes "[DOMAIN]\"
+            $userEmail = $thisUser + "@[YOURORGEMAILADDRESS]"
+
+                Write-Host ""
+                Write-Host "Running for " $userEmail
+                Write-Host ""
+
+            $title = "  PC Backup to Google Drive -- " +$userEmail
+            $text = "This utility will place a backup of your files into the following user's Google Drive: 
+            
+            " + $userEmail + ".
+            
+            Several Command Prompt windows will open and close during the backup. Do not turn off the computer until the backup is complete.
+            Do you wish to begin?"
+
+            $popup = Show-DialogBox -Title $title -Text $text -Buttons 'OKCancel' -DefaultButton 'Second' -Icon 'Exclamation' -Timeout 600 -Topmost $false
+            if ($popup -eq 'Cancel') { 
+	            Exit-Script -ExitCode 1603 
+              
+#=================================================================================================            
+#=================================================================================================            
+#=================================================================================================        
+              
+        #============================
+        #Paste this section into the "Installation Tasks" section of PSADT
+        #============================
+        
+                #use google's rclone documentation to create a config file and a json file for your domain
+        
+                #get current path we're running this script from
+                $currentPath=Split-Path ((Get-Variable MyInvocation -Scope Script).Value).MyCommand.Path
+
+                #Create local folder. Copy in the rclone config and [domain] json from cifs
+                #feel free to delete this folder in the Post-Installation step
+                New-Item -Path 'C:\temp\rclone' -ItemType Directory
+                    Copy-Item $currentPath\Files\[config name] -Destination "C:\temp\rclone\"
+                    Copy-Item $currentPath\Files\[json] -Destination "C:\temp\rclone\"
+                    Copy-Item $currentPath\Files\rclone.exe -Destination "C:\temp\rclone\"
+
+                $rcloneExe = "C:\temp\rclone\rclone.exe"
+
+                Write-Host ""
+                $file = C:\temp\rclone\rclone.exe config file
+                Write-Host $file
+                Write-Host ""
+                
+
+                #=================================================================================================
+
+                #NOTE: user and email is found in the PreInstallation step
+
+                #the first part of the flag that will always be the same for each folder we copy
+                #the second part that includes the username
+                $flags0a = "-v --drive-impersonate " + $userEmail + " --drive-chunk-size=256M --transfers 8 --checkers 16 --drive-stop-on-upload-limit " #that trailing space ( ) is required
+                $flags0b = "copy [location of user's username directory, either on share drive or local]" + $thisUser
+
+                #NOTE if you want to export the log instead of showing it in CMD, add "--log-file=C:\temp\rclonemount.txt " include the trailing space ( )
+
+                #the final constructed flags for each folder we copy
+                $flags1 = $flags0a + $flags0b + "\Desktop rcloneConfig:\_pcBackup\Desktop" 
+                $flags2 = $flags0a + $flags0b + "\Documents rcloneConfig:\_pcBackup\Documents"
+                $flags3 = $flags0a + $flags0b + "\Downloads rcloneConfig:\_pcBackup\Downloads"
+
+                Write-Host $rcloneExe $flags1
+
+                #if you want to copy a local folder:
+                #$flags2 = $flags0 + "copy C:\temp\myTest2 rcloneConfig:\_BACKUP\myTest2"
+
+                #the actual thing. Runs once for each directory it's backing up
+                Start-Process $rcloneExe $flags1 -Wait
+                Start-Process $rcloneExe $flags2 -Wait
+                Start-Process $rcloneExe $flags3 -Wait
+
+        
+        
